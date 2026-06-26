@@ -11,24 +11,12 @@ from qdrant_client.models import (
     MatchValue,
     MatchAny,
 )
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+import time
+import google.generativeai as genai
 
 from app.config import get_settings
 
 settings = get_settings()
-
-# Initialize embedding model
-_embeddings_model = None
-
-
-def get_embeddings_model() -> GoogleGenerativeAIEmbeddings:
-    global _embeddings_model
-    if _embeddings_model is None:
-        _embeddings_model = GoogleGenerativeAIEmbeddings(
-            model=settings.GEMINI_EMBEDDING_MODEL,
-            google_api_key=settings.GEMINI_API_KEY,
-        )
-    return _embeddings_model
 
 
 # Initialize Qdrant client
@@ -83,15 +71,35 @@ def ensure_collection_exists():
 
 
 def generate_embeddings(texts: list[str]) -> list[list[float]]:
-    """Generate embeddings for a list of texts using Gemini."""
-    model = get_embeddings_model()
-    # Process in batches of 100 to respect API limits
+    """Generate embeddings for a list of texts using Gemini with rate limit protection."""
+    genai.configure(api_key=settings.GEMINI_API_KEY)
     all_embeddings = []
     batch_size = 100
     for i in range(0, len(texts), batch_size):
         batch = texts[i : i + batch_size]
-        batch_embeddings = model.embed_documents(batch)
-        all_embeddings.extend(batch_embeddings)
+        
+        # Retry with exponential backoff if rate limited
+        retries = 5
+        backoff = 2
+        for attempt in range(retries):
+            try:
+                res = genai.embed_content(
+                    model=settings.GEMINI_EMBEDDING_MODEL,
+                    content=batch,
+                )
+                batch_embeddings = res["embedding"]
+                all_embeddings.extend(batch_embeddings)
+                break
+            except Exception as e:
+                if attempt == retries - 1:
+                    raise e
+                time.sleep(backoff)
+                backoff *= 2
+                
+        # Pause slightly between successful batches to respect Free Tier RPM limits
+        if i + batch_size < len(texts):
+            time.sleep(3.0)
+            
     return all_embeddings
 
 
@@ -149,8 +157,12 @@ def search_similar(
     Search for similar chunks in Qdrant.
     Returns list of {point_id, score, payload} dicts.
     """
-    model = get_embeddings_model()
-    query_embedding = model.embed_query(query)
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    res = genai.embed_content(
+        model=settings.GEMINI_EMBEDDING_MODEL,
+        content=query,
+    )
+    query_embedding = res["embedding"]
 
     client = get_qdrant_client()
     ensure_collection_exists()
