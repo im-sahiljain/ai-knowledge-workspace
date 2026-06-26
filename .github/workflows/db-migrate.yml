@@ -1,0 +1,46 @@
+name: Database Migrations
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/models.py'
+      - 'backend/alembic/**'
+      - 'backend/alembic.ini'
+      - '.github/workflows/db-migrate.yml'
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Mock other envs needed during Alembic import time (if any)
+          REDIS_URL: "redis://localhost:6379/0"
+          QDRANT_URL: "http://localhost:6333"
+          GEMINI_API_KEY: "mock-key"
+          CLOUDINARY_CLOUD_NAME: "mock"
+          CLOUDINARY_API_KEY: "mock"
+          CLOUDINARY_API_SECRET: "mock"
+          JWT_SECRET_KEY: "mock-secret-key-at-least-32-chars"
+        run: |
+          cd backend
+          alembic upgrade head
