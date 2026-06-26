@@ -1,7 +1,7 @@
 from typing import Optional
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 from app.config import get_settings
 from app.services.ai.embeddings import search_similar
