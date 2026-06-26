@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     # ── Google Gemini ──
     GEMINI_API_KEY: str
-    GEMINI_EMBEDDING_MODEL: str = "models/text-embedding-004"
+    GEMINI_EMBEDDING_MODEL: str = "models/gemini-embedding-2"
     GEMINI_CHAT_MODEL: str = "gemini-2.0-flash"
 
     # ── Cloudinary ──

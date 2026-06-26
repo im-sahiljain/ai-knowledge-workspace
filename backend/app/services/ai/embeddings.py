@@ -46,17 +46,40 @@ def get_qdrant_client() -> QdrantClient:
 
 
 def ensure_collection_exists():
-    """Create the Qdrant collection if it doesn't exist."""
+    """Create the Qdrant collection if it doesn't exist, or recreate it if the dimension is wrong."""
     client = get_qdrant_client()
-    collections = [c.name for c in client.get_collections().collections]
-    if settings.QDRANT_COLLECTION not in collections:
-        client.create_collection(
-            collection_name=settings.QDRANT_COLLECTION,
-            vectors_config=VectorParams(
-                size=768,  # Gemini text-embedding-004 dimension
-                distance=Distance.COSINE,
-            ),
-        )
+    try:
+        info = client.get_collection(settings.QDRANT_COLLECTION)
+        # Check if the size matches our expected 3072 dimension
+        vectors_config = info.config.params.vectors
+        
+        # Handle dict vs object return type across different Qdrant clients
+        if isinstance(vectors_config, dict):
+            size = vectors_config.get("size")
+        else:
+            size = getattr(vectors_config, "size", None)
+            
+        if size != 3072:
+            client.delete_collection(settings.QDRANT_COLLECTION)
+            client.create_collection(
+                collection_name=settings.QDRANT_COLLECTION,
+                vectors_config=VectorParams(
+                    size=3072,  # gemini-embedding-2 dimension
+                    distance=Distance.COSINE,
+                ),
+            )
+    except Exception:
+        # Collection does not exist, create it
+        try:
+            client.create_collection(
+                collection_name=settings.QDRANT_COLLECTION,
+                vectors_config=VectorParams(
+                    size=3072,  # gemini-embedding-2 dimension
+                    distance=Distance.COSINE,
+                ),
+            )
+        except Exception:
+            pass
 
 
 def generate_embeddings(texts: list[str]) -> list[list[float]]:
