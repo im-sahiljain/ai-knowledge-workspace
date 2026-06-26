@@ -38,7 +38,10 @@ _qdrant_client = None
 def get_qdrant_client() -> QdrantClient:
     global _qdrant_client
     if _qdrant_client is None:
-        _qdrant_client = QdrantClient(url=settings.QDRANT_URL)
+        if settings.QDRANT_URL.startswith("http://") or settings.QDRANT_URL.startswith("https://"):
+            _qdrant_client = QdrantClient(url=settings.QDRANT_URL)
+        else:
+            _qdrant_client = QdrantClient(path=settings.QDRANT_URL)
     return _qdrant_client
 
 
